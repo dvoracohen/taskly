@@ -9,13 +9,21 @@ See `PLAN.md` for the phased plan and `docs/taskly-prd.docx` for full requiremen
 - **Hosting:** Vercel (static build)
 - No auth, no app server, no Edge Functions.
 
-## Features (Phase 1)
+## Features
 
-- Views: **היום** (due today or overdue, not done; the default), **הכל** and **הושלמו**, at `#/today`, `#/all` and `#/done`
-- Quick add: type a title and press Enter. Tasks added from Today are due today.
-- Task rows: done checkbox, priority, "בתהליך" chip, due date. Overdue tasks are red; done tasks are struck through.
-- Edit drawer: title, description, due date, priority and status, plus delete with confirmation
-- Changes show immediately. If saving fails, the change is rolled back and a Hebrew error toast appears.
+- **Views:**
+  - **היום** (due today or overdue, not done; the default), **הכל** and **הושלמו**, at `#/today`, `#/all` and `#/done`
+  - one view per category at `#/category/<id>`, and **ללא קטגוריה** at `#/category/none`
+- **Sidebar** (on the right on wide screens; above the list on narrow ones):
+  - views and categories, each category with its color and open-task count
+  - create, rename or recolor, and delete categories
+  - deleting a category keeps its tasks and moves them to "ללא קטגוריה"
+- **Quick add:** type a title and press Enter. Tasks added from Today are due today; tasks added in a category view get that category.
+- **Task rows:** done checkbox, priority, "בתהליך" chip, due date, category tag. Overdue tasks are red; done tasks are struck through.
+- **Edit drawer:** title, description, due date, priority, status and category, plus delete with confirmation.
+- **Search and sort:** search the current view by title and description, and sort by due date, priority or created date.
+- **Header counters:** open, overdue, and completed today.
+- **Saving:** changes show immediately. If saving fails, the change is rolled back and a Hebrew error toast appears.
 
 ## App structure
 
@@ -27,17 +35,24 @@ src/
   main.js               entry point: boots ui/app.js
   api/                  Supabase access. client.js is the only file that imports supabase-js
     tasks.js            listTasks / createTask / updateTask / deleteTask
+    categories.js       listCategories / createCategory / updateCategory / deleteCategory
   state/
-    store.js            task store + pub/sub; optimistic updates with per-item rollback
+    store.js            tasks + categories, pub/sub; optimistic updates with per-item rollback
   ui/                   DOM rendering and events; user text via textContent only
-    app.js              shell, nav, re-render on store/route change
-    router.js           hash routing
-    taskList.js         rows, skeleton, empty and error states
-    drawer.js           edit drawer (<dialog>)
+    app.js              shell and layout; re-renders on store/route/search changes
+    router.js           hash routing (parseHash / routeHash)
+    sidebar.js          views + categories nav
+    categoryDialog.js   create / edit / delete category (<dialog>)
+    toolbar.js          search + sort
+    counters.js         header counters
+    taskList.js         rows, skeleton, empty, no-results and error states
+    drawer.js           task edit drawer (<dialog>)
     quickAdd.js, toast.js, dom.js
   lib/                  pure helpers, unit-tested
     dates.js            local "today", isOverdue, Hebrew due-date labels
-    views.js            Today / All / Done filters and ordering
+    views.js            Today / All / Done / category filters and ordering
+    query.js            search + sort; applyQuery = view -> search -> sort
+    counters.js         open / overdue / completed-today / per-category counts
   styles/               plain CSS
 supabase/migrations/    SQL migrations, applied in order
 prompts/                the prompt used for each development phase
