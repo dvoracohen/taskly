@@ -13,8 +13,13 @@ function setState(patch) {
   for (const fn of listeners) fn(state);
 }
 
-function notice(type, message) {
-  for (const fn of noticeListeners) fn({ type, message });
+/**
+ * Emits a notice for the toast layer.
+ * Optional: `action` ({ label, run }) adds a button; `key` lets a later
+ * { type: 'dismiss', key } notice remove the toast early.
+ */
+function notice(type, message, { action, key } = {}) {
+  for (const fn of noticeListeners) fn({ type, message, action, key });
 }
 
 const tempId = () => `temp-${crypto.randomUUID()}`;
@@ -131,24 +136,72 @@ export async function updateTask(id, patch, { silent = false } = {}) {
   }
 }
 
-/** Deletes a task optimistically; on failure it is restored at its old position. */
-export async function removeTask(id) {
+// Task deletes are deferred so they can be undone: the task leaves the list at once, and the
+// server delete only runs after UNDO_MS. id -> { task, index, timer }
+export const UNDO_MS = 5000;
+const pendingDeletes = new Map();
+const undoKey = (id) => `delete-${id}`;
+
+function restoreTask(task, index) {
+  if (state.tasks.some((t) => t.id === task.id)) return;
+  const tasks = state.tasks.slice();
+  tasks.splice(Math.min(index, tasks.length), 0, task);
+  setState({ tasks });
+}
+
+async function commitDelete(id) {
+  const entry = pendingDeletes.get(id);
+  if (!entry) return;
+  clearTimeout(entry.timer);
+  pendingDeletes.delete(id);
+  notice('dismiss', null, { key: undoKey(id) });
+
+  try {
+    await api.deleteTask(id);
+  } catch (err) {
+    console.error('Failed to delete task:', err);
+    restoreTask(entry.task, entry.index);
+    notice('error', 'לא הצלחנו למחוק את המשימה. נסו שוב.');
+  }
+}
+
+/** Removes a task now and deletes it on the server after UNDO_MS unless undone. */
+export function removeTask(id) {
   const i = state.tasks.findIndex((t) => t.id === id);
   if (i === -1) return;
   const removed = state.tasks[i];
   if (removed.pending) return;
   setState({ tasks: state.tasks.filter((t) => t !== removed) });
 
-  try {
-    await api.deleteTask(id);
-    notice('success', 'המשימה נמחקה');
-  } catch (err) {
-    console.error('Failed to delete task:', err);
-    const tasks = state.tasks.slice();
-    tasks.splice(Math.min(i, tasks.length), 0, removed);
-    setState({ tasks });
-    notice('error', 'לא הצלחנו למחוק את המשימה. נסו שוב.');
-  }
+  const timer = setTimeout(() => commitDelete(id), UNDO_MS);
+  pendingDeletes.set(id, { task: removed, index: i, timer });
+  notice('undo', 'המשימה נמחקה', {
+    key: undoKey(id),
+    action: { label: 'ביטול', run: () => undoDelete(id) },
+  });
+}
+
+/** Cancels a pending delete and puts the task back where it was. Returns true if undone. */
+export function undoDelete(id) {
+  const entry = pendingDeletes.get(id);
+  if (!entry) return false;
+  clearTimeout(entry.timer);
+  pendingDeletes.delete(id);
+  restoreTask(entry.task, entry.index);
+  notice('dismiss', null, { key: undoKey(id) });
+  notice('success', 'המשימה שוחזרה');
+  return true;
+}
+
+/** Undoes the most recent pending delete (Ctrl/Cmd+Z). */
+export function undoLastDelete() {
+  const last = [...pendingDeletes.keys()].at(-1);
+  return last ? undoDelete(last) : false;
+}
+
+/** Sends all pending deletes now (e.g. when the page is being closed). */
+export function flushPendingDeletes() {
+  return Promise.all([...pendingDeletes.keys()].map(commitDelete));
 }
 
 // ---------------------------------------------------------------------------

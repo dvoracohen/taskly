@@ -30,6 +30,10 @@ export function createToolbar({ onChange }) {
 
   return {
     element,
+    focusSearch() {
+      search.focus();
+      search.select();
+    },
     clearSearch() {
       search.value = '';
       emit();

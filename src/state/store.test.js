@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../api/tasks.js', () => ({
   listTasks: vi.fn(),
@@ -59,14 +59,16 @@ describe('store optimistic updates', () => {
     expect(notices.at(-1).type).toBe('error');
   });
 
-  it('restores a failed delete at its original position', async () => {
+  it('restores a delete that fails on the server at its original position', async () => {
+    vi.useFakeTimers();
     vi.mocked(api.deleteTask).mockRejectedValue(new Error('offline'));
-    const pending = store.removeTask('b');
+    store.removeTask('b');
     expect(titles()).toEqual(['a', 'c']);
 
-    await pending;
+    await vi.advanceTimersByTimeAsync(store.UNDO_MS);
     expect(titles()).toEqual(['a', 'b', 'c']);
     expect(notices.at(-1).type).toBe('error');
+    vi.useRealTimers();
   });
 
   it('removes the temporary task when create fails', async () => {
@@ -171,5 +173,56 @@ describe('store categories', () => {
 
     await pending;
     expect(store.getCategory('work').name).toBe('work');
+  });
+});
+
+describe('store undo delete', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it('undo within the window restores the task and never calls the API', async () => {
+    store.removeTask('b');
+    expect(titles()).toEqual(['a', 'c']);
+    expect(notices.at(-1)).toMatchObject({ type: 'undo', message: 'המשימה נמחקה' });
+
+    await vi.advanceTimersByTimeAsync(store.UNDO_MS - 1);
+    notices.at(-1).action.run();
+    expect(titles()).toEqual(['a', 'b', 'c']);
+
+    await vi.advanceTimersByTimeAsync(store.UNDO_MS * 2);
+    expect(api.deleteTask).not.toHaveBeenCalled();
+  });
+
+  it('without undo, deletes on the server after the window', async () => {
+    vi.mocked(api.deleteTask).mockResolvedValue();
+    store.removeTask('b');
+
+    await vi.advanceTimersByTimeAsync(store.UNDO_MS - 1);
+    expect(api.deleteTask).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(api.deleteTask).toHaveBeenCalledWith('b');
+    expect(titles()).toEqual(['a', 'c']);
+    expect(store.undoDelete('b')).toBe(false);
+  });
+
+  it('undoLastDelete restores the most recent delete only', async () => {
+    store.removeTask('a');
+    store.removeTask('c');
+    expect(store.undoLastDelete()).toBe(true);
+    expect(titles()).toEqual(['b', 'c']);
+    expect(store.undoLastDelete()).toBe(true);
+    expect(titles()).toEqual(['a', 'b', 'c']);
+    expect(store.undoLastDelete()).toBe(false);
+  });
+
+  it('flushPendingDeletes sends pending deletes immediately', async () => {
+    vi.mocked(api.deleteTask).mockResolvedValue();
+    store.removeTask('a');
+    store.removeTask('c');
+    await store.flushPendingDeletes();
+
+    expect(api.deleteTask).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(store.UNDO_MS);
+    expect(api.deleteTask).toHaveBeenCalledTimes(2);
   });
 });

@@ -139,8 +139,8 @@ export function createDrawer({ onSave, onDelete, onClose }) {
     if (Object.keys(patch).length > 0) onSave(id, patch);
   }
 
+  // No confirm(): the delete can be undone for a few seconds from the toast (or Ctrl+Z).
   function remove() {
-    if (!confirm('למחוק את המשימה?')) return;
     const id = task.id;
     dialog.close();
     onDelete(id);

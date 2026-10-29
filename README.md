@@ -14,16 +14,34 @@ See `PLAN.md` for the phased plan and `docs/taskly-prd.docx` for full requiremen
 - **Views:**
   - **היום** (due today or overdue, not done; the default), **הכל** and **הושלמו**, at `#/today`, `#/all` and `#/done`
   - one view per category at `#/category/<id>`, and **ללא קטגוריה** at `#/category/none`
-- **Sidebar** (on the right on wide screens; above the list on narrow ones):
+- **Sidebar** (on the right from 1024px wide; below that, it opens from the ☰ menu button):
   - views and categories, each category with its color and open-task count
   - create, rename or recolor, and delete categories
   - deleting a category keeps its tasks and moves them to "ללא קטגוריה"
 - **Quick add:** type a title and press Enter. Tasks added from Today are due today; tasks added in a category view get that category.
 - **Task rows:** done checkbox, priority, "בתהליך" chip, due date, category tag. Overdue tasks are red; done tasks are struck through.
-- **Edit drawer:** title, description, due date, priority, status and category, plus delete with confirmation.
+- **Edit drawer:** title, description, due date, priority, status and category, plus delete.
+- **Undo delete:** deleting a task shows a "ביטול" (undo) button for 5 seconds, and `Ctrl/Cmd+Z` does the same. The task is only deleted on the server after those 5 seconds. Deleting a category still asks for confirmation, because it can't be undone.
 - **Search and sort:** search the current view by title and description, and sort by due date, priority or created date.
 - **Header counters:** open, overdue, and completed today.
 - **Saving:** changes show immediately. If saving fails, the change is rolled back and a Hebrew error toast appears.
+- **Dark mode:** follows the system setting by default. The ☾/☀ button in the header overrides it, and the choice is remembered in this browser.
+- **Keyboard shortcuts** (they don't fire while you're typing in a field):
+
+  | Key                             | Action                                  |
+  | ------------------------------- | --------------------------------------- |
+  | `n` (or `מ` on a Hebrew layout) | Focus the new-task field                |
+  | `/` (or `.` on a Hebrew layout) | Focus search                            |
+  | `Esc`                           | Close the drawer, a dialog, or the menu |
+  | `Ctrl/Cmd+Z`                    | Undo the last task delete               |
+
+- **Accessibility:**
+  - a skip link at the top of the page
+  - visible keyboard focus everywhere
+  - Hebrew labels on all icon buttons
+  - WCAG AA contrast in both themes
+  - 44px touch targets on phones
+  - animations turned off when the system asks for reduced motion
 
 ## App structure
 
@@ -47,12 +65,18 @@ src/
     counters.js         header counters
     taskList.js         rows, skeleton, empty, no-results and error states
     drawer.js           task edit drawer (<dialog>)
-    quickAdd.js, toast.js, dom.js
+    mobileNav.js        menu button + off-canvas sidebar below 1024px
+    theme.js            dark-mode toggle
+    shortcuts.js        global keyboard shortcuts + hint
+    toast.js            toasts, including the undo action
+    quickAdd.js, dom.js
   lib/                  pure helpers, unit-tested
     dates.js            local "today", isOverdue, Hebrew due-date labels
     views.js            Today / All / Done / category filters and ordering
     query.js            search + sort; applyQuery = view -> search -> sort
     counters.js         open / overdue / completed-today / per-category counts
+    theme.js            resolve the saved / system theme
+    shortcuts.js        keyboard shortcut matching
   styles/               plain CSS
 supabase/migrations/    SQL migrations, applied in order
 prompts/                the prompt used for each development phase
