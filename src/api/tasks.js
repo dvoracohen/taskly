@@ -1,7 +1,7 @@
 import { getSupabase } from './client.js';
 
 const COLUMNS =
-  'id, title, description, status, priority, due_date, completed_at, created_at, updated_at';
+  'id, title, description, status, priority, due_date, category_id, completed_at, created_at, updated_at';
 
 /** Fetches all tasks, newest first. Throws on failure. */
 export async function listTasks() {
