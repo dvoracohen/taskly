@@ -1,30 +1,45 @@
-// App shell: header, view nav, quick add, list, drawer and toasts.
+// App shell: header + counters, sidebar, toolbar, quick add, list, drawer, dialogs, toasts.
 // Talks to state only — never to api/.
+import { openByCategory } from '../lib/counters.js';
 import { todayISO } from '../lib/dates.js';
+import { applyQuery } from '../lib/query.js';
 import { VIEWS } from '../lib/views.js';
 import * as store from '../state/store.js';
+import { createCategoryDialog } from './categoryDialog.js';
+import { createCounters } from './counters.js';
 import { el } from './dom.js';
 import { createDrawer } from './drawer.js';
 import { createQuickAdd } from './quickAdd.js';
-import { startRouter } from './router.js';
+import { DEFAULT_HASH, startRouter } from './router.js';
+import { createSidebar } from './sidebar.js';
 import { renderTaskList } from './taskList.js';
 import { createToasts } from './toast.js';
+import { createToolbar } from './toolbar.js';
 
 export function initApp(root) {
-  let view = null;
+  let route = null;
+  // View settings, kept while the app is open (not data, so not in the store).
+  let query = { search: '', sort: 'default' };
 
   const toasts = createToasts();
   store.onNotice(toasts.show);
 
-  const quickAdd = createQuickAdd({
-    // Tasks added from Today are due today, so they stay in the view they were added to.
-    onAdd: (title) => store.addTask(title, view === 'today' ? { due_date: todayISO() } : {}),
-  });
+  const quickAdd = createQuickAdd({ onAdd: (title) => store.addTask(title, newTaskFields()) });
 
-  const navLinks = Object.entries(VIEWS).map(([key, { title }]) =>
-    el('a', { class: 'views__link', href: `#/${key}`, text: title, dataset: { view: key } }),
-  );
-  const nav = el('nav', { class: 'views', 'aria-label': 'תצוגות' }, navLinks);
+  // Tasks added from a view should stay visible in that view.
+  function newTaskFields() {
+    if (route.view === 'today') return { due_date: todayISO() };
+    if (route.view === 'category' && route.categoryId) return { category_id: route.categoryId };
+    return {};
+  }
+
+  const counters = createCounters();
+  const toolbar = createToolbar({
+    onChange: (next) => {
+      query = next;
+      render();
+    },
+  });
   const viewTitle = el('h2', { class: 'view-title', id: 'view-title' });
   const listArea = el('section', { class: 'list-area', 'aria-labelledby': 'view-title' });
 
@@ -39,6 +54,30 @@ export function initApp(root) {
     },
   });
 
+  const categoryDialog = createCategoryDialog({
+    getCategories: () => store.getState().categories,
+    onCreate: (name, color) => store.addCategory(name, color),
+    onUpdate: (id, patch) => store.updateCategory(id, patch),
+    onDelete: (id) => {
+      // Leaving the deleted category's own view: its tasks are now in "ללא קטגוריה" / All.
+      // Set the route now: hashchange fires later, and the render triggered by the delete
+      // would otherwise treat the category as unknown and redirect to Today.
+      if (route.view === 'category' && route.categoryId === id) {
+        route = { view: 'all' };
+        location.hash = '#/all';
+      }
+      store.removeCategory(id);
+    },
+  });
+
+  const sidebar = createSidebar({
+    onNewCategory: () => categoryDialog.open(),
+    onEditCategory: (id) => {
+      const category = store.getCategory(id);
+      if (category && !category.pending) categoryDialog.open(category);
+    },
+  });
+
   const handlers = {
     onToggle: (task) =>
       store.updateTask(
@@ -48,47 +87,81 @@ export function initApp(root) {
       ),
     onOpen: (id) => {
       const task = store.getTask(id);
-      if (task && !task.pending) drawer.open(task);
+      if (task && !task.pending) drawer.open(task, store.getState().categories);
     },
     onRetry: () => store.load(),
     onFocusAdd: () => quickAdd.focus(),
+    onClearSearch: () => toolbar.clearSearch(),
   };
 
   root.replaceChildren(
-    el('header', { class: 'app-header' }, el('h1', { class: 'app-title', text: 'Taskly' })),
-    nav,
-    quickAdd.element,
-    viewTitle,
-    listArea,
+    el(
+      'header',
+      { class: 'app-header' },
+      el('h1', { class: 'app-title', text: 'Taskly' }),
+      counters.element,
+    ),
+    el(
+      'div',
+      { class: 'layout' },
+      sidebar.element,
+      el('main', { class: 'main' }, viewTitle, toolbar.element, quickAdd.element, listArea),
+    ),
   );
-  document.body.append(drawer.element, toasts.element);
+  document.body.append(drawer.element, categoryDialog.element, toasts.element);
+
+  function viewName(categories) {
+    if (route.view !== 'category') return VIEWS[route.view].title;
+    if (route.categoryId === null) return 'ללא קטגוריה';
+    return categories.find((c) => c.id === route.categoryId)?.name ?? '';
+  }
 
   function render() {
-    if (!view) return;
-    const { tasks, loading, loadError } = store.getState();
+    if (!route) return;
+    const { tasks, categories, loading, loadError } = store.getState();
     const today = todayISO();
 
-    for (const link of navLinks) {
-      if (link.dataset.view === view) link.setAttribute('aria-current', 'page');
-      else link.removeAttribute('aria-current');
+    // Unknown category id (e.g. deleted, or a stale bookmark): back to the default view.
+    if (
+      route.view === 'category' &&
+      route.categoryId &&
+      !loading &&
+      !loadError &&
+      !categories.some((c) => c.id === route.categoryId)
+    ) {
+      location.replace(DEFAULT_HASH);
+      return;
     }
-    viewTitle.textContent = VIEWS[view].title;
-    quickAdd.element.hidden = view === 'done';
 
-    // Re-rendering replaces the rows; keep keyboard focus on the same control if it survives.
+    // Re-rendering replaces rows and links; keep keyboard focus on the same control.
     const focusKey = document.activeElement?.dataset?.focusKey;
+
+    counters.update(tasks, today);
+    sidebar.update({ route, categories, openCounts: openByCategory(tasks) });
+    viewTitle.textContent = viewName(categories);
+    quickAdd.element.hidden = route.view === 'done';
+
     listArea.replaceChildren(
       renderTaskList(
-        { view, tasks: VIEWS[view].filter(tasks, today), loading, loadError, today },
+        {
+          route,
+          tasks: applyQuery(tasks, { route, today, ...query }),
+          loading,
+          loadError,
+          today,
+          search: query.search,
+          categoriesById: new Map(categories.map((c) => [c.id, c])),
+        },
         handlers,
       ),
     );
-    if (focusKey) listArea.querySelector(`[data-focus-key="${focusKey}"]`)?.focus();
+
+    if (focusKey) root.querySelector(`[data-focus-key="${CSS.escape(focusKey)}"]`)?.focus();
   }
 
   store.subscribe(render);
   startRouter((next) => {
-    view = next;
+    route = next;
     render();
   });
   store.load();

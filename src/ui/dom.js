@@ -23,5 +23,15 @@ export function el(tag, props = {}, ...children) {
   return node;
 }
 
+/**
+ * Decorative color dot. The color goes through the CSSOM (style.backgroundColor), not a style
+ * attribute string, so a stored value can only ever be a color — invalid values are ignored.
+ */
+export function colorDot(color, className = 'dot') {
+  const dot = el('span', { class: className, 'aria-hidden': 'true' });
+  dot.style.backgroundColor = color;
+  return dot;
+}
+
 /** Visually hidden text for screen readers. */
 export const srOnly = (text) => el('span', { class: 'sr-only', text });

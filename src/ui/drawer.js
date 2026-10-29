@@ -46,6 +46,8 @@ export function createDrawer({ onSave, onDelete, onClose }) {
   });
   const priority = el('select', { name: 'priority' }, options(PRIORITY_OPTIONS));
   const status = el('select', { name: 'status' }, options(STATUS_OPTIONS));
+  // Options are rebuilt on every open from the current categories; '' = uncategorized.
+  const category = el('select', { name: 'category_id' });
 
   const dialog = el('dialog', { class: 'drawer', 'aria-labelledby': 'drawer-title' });
 
@@ -74,6 +76,7 @@ export function createDrawer({ onSave, onDelete, onClose }) {
       el('div', { class: 'field__row' }, dueDate, clearDate),
     ),
     el('div', { class: 'field-pair' }, field('עדיפות', priority), field('סטטוס', status)),
+    field('קטגוריה', category),
     el(
       'footer',
       { class: 'drawer__footer' },
@@ -125,6 +128,7 @@ export function createDrawer({ onSave, onDelete, onClose }) {
       due_date: dueDate.value || null,
       priority: priority.value,
       status: status.value,
+      category_id: category.value || null,
     };
     const patch = Object.fromEntries(
       Object.entries(next).filter(([key, value]) => value !== (task[key] ?? null)),
@@ -142,13 +146,21 @@ export function createDrawer({ onSave, onDelete, onClose }) {
     onDelete(id);
   }
 
-  function open(target) {
+  /** Opens the drawer for `target`; `categories` fills the category select. */
+  function open(target, categories = []) {
     task = target;
     title.value = target.title;
     description.value = target.description ?? '';
     dueDate.value = target.due_date ?? '';
     priority.value = target.priority;
     status.value = target.status;
+    category.replaceChildren(
+      el('option', { value: '', text: 'ללא קטגוריה' }),
+      ...categories
+        .filter((c) => !c.pending)
+        .map((c) => el('option', { value: c.id, text: c.name })),
+    );
+    category.value = target.category_id ?? '';
     titleError.hidden = true;
     title.removeAttribute('aria-invalid');
     dialog.showModal();
