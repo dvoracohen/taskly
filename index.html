@@ -13,10 +13,23 @@
       href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&display=swap"
       rel="stylesheet"
     />
+    <meta name="description" content="Taskly — ניהול משימות אישי" />
     <title>Taskly</title>
+    <script>
+      // Apply the saved theme before first paint (no flash). Same key as src/lib/theme.js.
+      // Without a saved choice, CSS follows prefers-color-scheme on its own.
+      try {
+        var saved = localStorage.getItem('taskly-theme');
+        if (saved === 'light' || saved === 'dark') {
+          document.documentElement.dataset.theme = saved;
+        }
+      } catch (e) {
+        // Storage blocked: fall back to the system theme.
+      }
+    </script>
   </head>
   <body>
-    <main id="app"></main>
+    <div id="app"></div>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>
