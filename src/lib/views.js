@@ -3,18 +3,18 @@
 const PRIORITY_RANK = { high: 0, medium: 1, low: 2 };
 
 // Tasks without a due date sort after dated ones.
-function compareDueDate(a, b) {
+export function compareDueDate(a, b) {
   if (a.due_date === b.due_date) return 0;
   if (!a.due_date) return 1;
   if (!b.due_date) return -1;
   return a.due_date < b.due_date ? -1 : 1;
 }
 
-const comparePriority = (a, b) =>
+export const comparePriority = (a, b) =>
   (PRIORITY_RANK[a.priority] ?? 1) - (PRIORITY_RANK[b.priority] ?? 1);
 
 // Newest first; ISO timestamps compare correctly as strings.
-const compareDesc = (key) => (a, b) => (b[key] ?? '').localeCompare(a[key] ?? '');
+export const compareDesc = (key) => (a, b) => (b[key] ?? '').localeCompare(a[key] ?? '');
 
 const byDueThenPriority = (a, b) => compareDueDate(a, b) || comparePriority(a, b);
 const byDueThenCreated = (a, b) => compareDueDate(a, b) || compareDesc('created_at')(a, b);
@@ -38,8 +38,19 @@ export function filterDone(tasks) {
   return tasks.filter((t) => t.status === 'done').sort(compareDesc('completed_at'));
 }
 
+/** Tasks in one category (categoryId null = uncategorized), ordered like All. */
+export function filterCategory(tasks, categoryId) {
+  return filterAll(tasks.filter((t) => (t.category_id ?? null) === categoryId));
+}
+
 export const VIEWS = {
   today: { title: 'היום', filter: filterToday },
   all: { title: 'הכל', filter: filterAll },
   done: { title: 'הושלמו', filter: filterDone },
 };
+
+/** Applies the view filter for a route: { view: 'today'|'all'|'done' } or { view: 'category', categoryId }. */
+export function filterForRoute(tasks, route, today) {
+  if (route.view === 'category') return filterCategory(tasks, route.categoryId);
+  return VIEWS[route.view].filter(tasks, today);
+}
