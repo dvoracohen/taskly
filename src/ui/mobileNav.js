@@ -5,8 +5,11 @@ import { el } from './dom.js';
 
 const desktop = window.matchMedia('(min-width: 1024px)');
 
-/** `sidebar` is the sidebar element; `background` lists the elements to make inert. */
-export function createMobileNav({ sidebar, background }) {
+/**
+ * `sidebar` is the sidebar element; `background` lists the elements to make inert;
+ * `content` (focusable) receives focus after a link in the menu is chosen.
+ */
+export function createMobileNav({ sidebar, background, content }) {
   sidebar.id = 'sidebar';
 
   const button = el(
@@ -50,7 +53,13 @@ export function createMobileNav({ sidebar, background }) {
       close();
     }
   });
-  // Choosing a view or category closes the menu; focus then goes to the content.
+  // Choosing a view or category closes the menu — also when it is the view already shown,
+  // which fires no hashchange. Focus then goes to the content.
+  sidebar.addEventListener('click', (event) => {
+    if (!event.target.closest('a') || !isOpen()) return;
+    close({ restoreFocus: false });
+    content.focus();
+  });
   window.addEventListener('hashchange', () => close({ restoreFocus: false }));
   desktop.addEventListener('change', () => close({ restoreFocus: false }));
 

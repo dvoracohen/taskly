@@ -51,10 +51,11 @@ export function initApp(root) {
     onSave: (id, patch) => store.updateTask(id, patch),
     onDelete: (id) => store.removeTask(id),
     onClose: (id) => {
-      // Return focus to the task's row; if it left this view, fall back to quick add.
+      // Return focus to the task's row. If it is gone (deleted, or moved out of this view),
+      // focus the main area — not a text field, so Ctrl+Z can still undo a delete.
       const row = id && listArea.querySelector(`[data-focus-key="open-${id}"]`);
       if (row) row.focus();
-      else quickAdd.focus();
+      else main.focus();
     },
   });
 
@@ -108,7 +109,11 @@ export function initApp(root) {
     shortcutHint(),
   );
   const header = el('header', { class: 'app-header' });
-  const mobileNav = createMobileNav({ sidebar: sidebar.element, background: [header, main] });
+  const mobileNav = createMobileNav({
+    sidebar: sidebar.element,
+    background: [header, main],
+    content: main,
+  });
   header.append(
     mobileNav.button,
     el('h1', { class: 'app-title', text: 'Taskly' }),
