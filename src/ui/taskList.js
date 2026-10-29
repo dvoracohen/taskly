@@ -42,15 +42,20 @@ function taskRow(task, today, category, { onToggle, onOpen }) {
   return el(
     'li',
     { class: classes.filter(Boolean).join(' ') },
-    el('input', {
-      class: 'task__check',
-      type: 'checkbox',
-      checked: done,
-      disabled: task.pending,
-      'aria-label': `סמן כהושלמה: ${task.title}`,
-      dataset: { focusKey: `check-${task.id}` },
-      onChange: () => onToggle(task),
-    }),
+    // The label is the 44px touch target around the 20px checkbox.
+    el(
+      'label',
+      { class: 'task__check-wrap' },
+      el('input', {
+        class: 'task__check',
+        type: 'checkbox',
+        checked: done,
+        disabled: task.pending,
+        'aria-label': `סמן כהושלמה: ${task.title}`,
+        dataset: { focusKey: `check-${task.id}` },
+        onChange: () => onToggle(task),
+      }),
+    ),
     el(
       'button',
       {
