@@ -1,6 +1,8 @@
 # Taskly
 
-A personal, single-user task manager with a Hebrew (RTL) interface.
+Personal single-user task manager with a Hebrew (RTL) interface. Vanilla JS (Vite) + Supabase + Vercel.
+
+See `PLAN.md` for the phased plan and `docs/taskly-prd.docx` for full requirements.
 
 - **Frontend:** Vanilla JavaScript (ES modules) + Vite, plain CSS
 - **Database:** Supabase (Postgres) via `@supabase/supabase-js`
